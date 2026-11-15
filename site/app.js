@@ -33,6 +33,7 @@ const state = {
   venues: new Set(store.get("venues", [])),
   vq: "",
   tips: false,
+  kids: store.get("kids", false),
   q: "",
 };
 let feed = null;
@@ -78,11 +79,27 @@ function matches(e, { ignoreCats = false, ignoreVenues = false } = {}) {
   if (!ignoreCats && state.cats.size && !state.cats.has(e.category)) return false;
   if (!ignoreVenues && state.venues.size && !state.venues.has(venueOf(e))) return false;
   if (state.tips && !e.top) return false;
+  if (state.kids && !(e.kids || e.category === "deti")) return false;
   if (state.q) {
     const hay = fold(`${e.title} ${e.venue || ""} ${e.city || ""} ${e.description || ""} ${CATS[e.category] || ""}`);
     if (!fold(state.q).split(/\s+/).every((w) => hay.includes(w))) return false;
   }
   return true;
+}
+
+/** Is the event shown anywhere in the current view? (weekend mode hides weekday-only events) */
+function inView(e) {
+  const last = e.end_date || e.date;
+  if (last < today) return false;
+  if (e.long) return true; // listed in the "Dlouhodobé" section
+  const days = shownDays();
+  for (let d = e.date < today ? today : e.date; d <= last && d <= feed.to; d = addDays(d, 1)) if (days.has(d)) return true;
+  return false;
+}
+let _days = null, _daysMode = null;
+function shownDays() {
+  if (_daysMode !== state.mode) { _days = new Set(periods().flatMap((p) => p.days)); _daysMode = state.mode; }
+  return _days;
 }
 
 /** The day within `days` on which an event is shown (its start, or the first day of the period if it's ongoing). */
@@ -124,7 +141,8 @@ function card(e, shownOn) {
   const badges = [
     e.top && `<span class="badge tip">Tip</span>`,
     e.sold_out && `<span class="badge sold">Vyprodáno</span>`,
-    e.kids && e.category !== "deti" && `<span class="badge kids">Dětem</span>`,
+    e.kids && e.category !== "deti" && !(e.tags || []).some((t) => t.startsWith("Věk")) && `<span class="badge kids">Pro děti</span>`,
+    ...(e.tags || []).map((t) => `<span class="badge ${t.startsWith("Věk") ? "kids" : "free"}">${esc(t)}</span>`),
   ].filter(Boolean).join("");
   const where = [e.venue, e.city && !(e.venue || "").includes(e.city) && e.city !== "Ostrava" ? e.city : null].filter(Boolean).join(" · ");
   const initial = esc((e.title.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase());
@@ -184,10 +202,20 @@ function render() {
   }
   if (!ps.length) html = `<div class="empty">Data jsou zastaralá – počkej na další aktualizaci.</div>`;
 
+  if (state.mode === "weekend") {
+    const hidden = visible.filter((e) => !e.long && (e.end_date || e.date) >= today && !inView(e)).length;
+    const anyShown = visible.some((e) => inView(e));
+    if (hidden && !anyShown) {
+      html = `<div class="empty hint">O víkendech tu nic není, ale ve všední dny ${hidden === 1 ? "je" : hidden < 5 ? "jsou" : "je"} ${hidden} ${plural(hidden)}.
+        <button class="btn primary" data-switch-all>Zobrazit všechny dny</button></div>` + html;
+    }
+  }
   $("#feed").innerHTML = html;
+  $("#feed [data-switch-all]")?.addEventListener("click", () => document.querySelector('.seg [data-mode="all"]').click());
   $("#jump").innerHTML = jump.join("");
   $("details.long")?.addEventListener("toggle", (ev) => store.set("longOpen", ev.target.open));
   renderCats();
+  renderVenues();
 }
 
 function plural(n) { return n === 1 ? "akce" : n >= 2 && n <= 4 ? "akce" : "akcí"; }
@@ -200,6 +228,9 @@ function renderRegions() {
     .map(([k, label]) => `<button class="chip${state.region === k ? " on" : ""}" data-region="${k}">${label}</button>`)
     .join("") +
     `<button class="chip star${state.tips ? " on" : ""}" data-tips>★ Jen tipy</button>` +
+    `<button class="chip kids${state.kids ? " on" : ""}" data-kids aria-pressed="${state.kids}">
+       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="5" r="2.2"/><circle cx="16.5" cy="8.5" r="1.8"/><path d="M8 8.5v6m0 0-2 5.5m2-5.5 2 5.5M5 11h6M16.5 11.5v4m0 0-1.5 4.5m1.5-4.5 1.5 4.5M14 13.5h5"/></svg>
+       S dětmi</button>` +
     `<button class="chip venue-btn${state.venues.size ? " on" : ""}" data-venues aria-expanded="${!$("#venues").hidden}" aria-controls="venues">
        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
        ${state.venues.size ? `Místa: ${state.venues.size}` : "Místa"}</button>` +
@@ -212,7 +243,7 @@ function renderVenues() {
   const counts = new Map();
   const regionOf = new Map();
   for (const e of feed.events) {
-    if ((e.end_date || e.date) < today || !matches(e, { ignoreVenues: true })) continue;
+    if (!inView(e) || !matches(e, { ignoreVenues: true })) continue;
     const v = venueOf(e);
     counts.set(v, (counts.get(v) || 0) + 1);
     if (!regionOf.has(v)) regionOf.set(v, e.region);
@@ -246,7 +277,7 @@ function venuesChanged() {
 
 function renderCats() {
   const counts = {};
-  for (const e of feed.events) if ((e.end_date || e.date) >= today && matches(e, { ignoreCats: true })) counts[e.category] = (counts[e.category] || 0) + 1;
+  for (const e of feed.events) if (inView(e) && matches(e, { ignoreCats: true })) counts[e.category] = (counts[e.category] || 0) + 1;
   $("#cats").innerHTML = `<button class="chip${state.cats.size ? "" : " on"}" data-cat="">Všechny kategorie</button>` +
     Object.entries(CATS)
       .filter(([k]) => counts[k] || state.cats.has(k))
@@ -284,6 +315,7 @@ function bind() {
     if ("venues" in b.dataset) return toggleVenuePanel();
     if ("clearVenues" in b.dataset) { state.venues.clear(); return venuesChanged(); }
     if ("tips" in b.dataset) state.tips = !state.tips;
+    else if ("kids" in b.dataset) { state.kids = !state.kids; store.set("kids", state.kids); }
     else { state.region = b.dataset.region; store.set("region", state.region); }
     renderRegions(); renderVenues(); render();
   });

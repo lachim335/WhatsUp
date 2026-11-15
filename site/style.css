@@ -210,6 +210,9 @@ main { padding-top: 12px; min-height: 50vh; }
 .badge.tip { background: rgba(242,179,91,.14); color: var(--accent); }
 .badge.sold { background: rgba(242,119,122,.13); color: var(--danger); }
 .badge.kids { background: rgba(52,211,153,.12); color: var(--c-deti); }
+.badge.free { background: rgba(96,165,250,.12); color: var(--c-film); }
+.chip.kids svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.chip.kids.on { background: var(--c-deti); border-color: var(--c-deti); color: #05261a; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; position: relative; z-index: 1; }
 .btn {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;

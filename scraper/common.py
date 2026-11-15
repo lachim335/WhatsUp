@@ -165,7 +165,7 @@ CATEGORY_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("divadlo", ("divadl", "muzikal", "opera", "balet", "predstaveni", "stand-up", "standup", "comedy", "kabaret")),
     ("film", ("film", "kino", "promitan")),
     ("vystavy", ("vystav", "expozic", "galeri", "vernisaz")),
-    ("trhy", ("advent", "vanoc", "jarmark", "trh", "trzi", "gastro", "food", "pivni", "slavnost", "posviceni", "masopust", "rozsvec")),
+    ("trhy", ("advent", "vanocni trh", "vanocni mestec", "vanocni jarmark", "vanoce v ", "vanoce na ", "ostravske vanoce", "jarmark", "trhy", "trh ", "trziste", "gastro", "food", "pivni", "slavnost", "posviceni", "masopust", "rozsvec")),
     ("festivaly", ("festival",)),
     ("sport", ("sport", "pohyb", "zavod", "beh ", "hokej", "fotbal", "turnaj", "cviceni", "hc ", " fc ")),
     ("prednasky", ("besed", "predn", "prochaz", "komentovan", "workshop", "kurz", "dilna", "cestovat")),
@@ -209,3 +209,23 @@ def venue_key(venue: str | None) -> str:
     v = re.sub(r"\(.*?\)", "", fold(venue))
     v = _VENUE_NOISE.sub(" ", v)
     return re.sub(r"[^a-z0-9]", "", v)
+
+
+# Kids/family detection. Title + venue are reliable; descriptions only with explicit phrases.
+_KIDS_TITLE = re.compile(r"\b(pohad|deti\b|detsk|detem|rodinn|pro rodiny|mikulas|cert|andel|loutk|batol|miminek|predskol|hernick|nejmensi|kids\b|family\b)")
+_KIDS_VENUE = re.compile(r"loutek|ctyrlistek|\bzoo\b|svet techniky|detsky svet|klicek|hernick|rodinne centrum")
+_KIDS_DESC = re.compile(r"pro deti|pro rodiny|rodiny s detmi|rodice s detmi|pro nejmensi|detske publikum|vhodne pro deti|deti od \d|od \d+ let\b")
+
+
+_ADULT = re.compile(r"burles|kabaret|cabaret|\bsex|erotic|18\s*\+|od 18 let|\bparty\b|oldies|squid game|stand.?up|comedy|terapie|alkohol|whisk|degustac|\bples\b|pro dospel|singles")
+
+
+def adult_only(title: str, venue: str | None, description: str | None) -> bool:
+    return bool(_ADULT.search(fold(f"{title} {venue or ''}")) or re.search(r"od 18 let|18\s*\+|pro dospel", fold(description or "")))
+
+
+def looks_like_kids(title: str, venue: str | None, description: str | None) -> bool:
+    if adult_only(title, venue, description):
+        return False
+    return bool(_KIDS_TITLE.search(fold(title)) or _KIDS_VENUE.search(fold(venue or ""))
+                or _KIDS_DESC.search(fold(description or "")))

@@ -14,8 +14,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .common import Event, dedupe_key, fold, venue_key
-from .sources import ics, jsonld, kudyznudy, kulturafm, novaosmicka, ostravainfo
+from .common import Event, adult_only, dedupe_key, fold, looks_like_kids, venue_key
+from .sources import ics, jsonld, kudyznudy, kulturafm, novaosmicka, ostravainfo, rodina, staraarena
 
 TZ = ZoneInfo("Europe/Prague")
 
@@ -27,7 +27,9 @@ SOURCES = [
     (novaosmicka.NAME, novaosmicka.HOME, novaosmicka.scrape),
     ics.feed("stoun.cz", "https://www.stoun.cz/program.ics", home="https://www.stoun.cz/program",
              venue="Klub STOUN", city="Frýdek-Místek", images=True),
+    (staraarena.NAME, staraarena.HOME, staraarena.scrape),
     jsonld.page("barrak-club.cz", "https://www.barrak-club.cz/cz", venue="Barrák Music Club", city="Ostrava"),
+    *rodina.SOURCES,  # zoo, Dolní Vítkovice, Muzeum Beskyd, knihovna F-M, SVČ Klíč
     (ostravainfo.NAME, "https://www.ostravainfo.cz/cz/akce/", ostravainfo.scrape),
     (kudyznudy.NAME, "https://www.kudyznudy.cz/kalendar-akci/moravskoslezsky-kraj", kudyznudy.scrape),
 ]
@@ -123,6 +125,8 @@ def main() -> int:
                     if val and not prev.get(f):
                         prev[f] = val
                 continue
+            e.kids = not adult_only(e.title, e.venue, e.description) and (
+                e.kids or e.category == "deti" or looks_like_kids(e.title, e.venue, e.description))
             d = e.to_json()
             span = (date.fromisoformat(last_day) - date.fromisoformat(e.date)).days
             if span > LONG_RUNNING_DAYS:

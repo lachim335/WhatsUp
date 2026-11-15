@@ -11,7 +11,15 @@ Tmavý web s přehledem kulturních akcí na nadcházející víkendy. Data se k
 | [novaosmicka.cz](https://www.novaosmicka.cz/program) | Nová Osmička (F-M), přes jejich [veřejné API](https://www.novaosmicka.cz/developers) |
 | [stoun.cz](https://www.stoun.cz/program) | klub STOUN (F-M), iCal export `program.ics` |
 | [barrak-club.cz](https://www.barrak-club.cz/cz) | Barrák Music Club (Ostrava), JSON-LD na webu |
+| [staraarena.cz](https://www.staraarena.cz/repertoar) | Stará aréna (Ostrava), JSON API, které používá jejich web |
+| [dolnivitkovice.cz](https://www.dolnivitkovice.cz/kalendar-akci) | Dolní Vítkovice: Svět techniky, U6, Gong, Bolt Tower |
+| [zoo-ostrava.cz](https://www.zoo-ostrava.cz/cz/akce-v-zoo/seznam-akci-v-zoo-ostrava/) | akce v Zoo Ostrava |
+| [muzeumbeskyd.com](https://www.muzeumbeskyd.com/program/akce/) | Muzeum Beskyd (zámek F-M) |
+| [knihovnafm.cz](https://www.knihovnafm.cz/akce/) | Městská knihovna F-M |
+| [klicfm.cz](https://www.klicfm.cz/akce) | SVČ Klíč F-M: akce pro děti s věkovým rozmezím |
 | [kudyznudy.cz](https://www.kudyznudy.cz/kalendar-akci/moravskoslezsky-kraj) | doplněk: jarmarky, trhy, akce v Ostravsku a Beskydech |
+
+Akce pro děti se poznají podle zdroje (kategorie, věk) a podle názvu nebo místa (pohádka, Mikuláš, Divadlo loutek, zoo, Svět techniky…). Akce zjevně pro dospělé (stand-up, burleska, 18+) se nikdy jako dětské neoznačí. Pravidla jsou v `looks_like_kids()` a `adult_only()` v `scraper/common.py`.
 
 Každý zdroj je samostatný modul v `scraper/sources/`. Když jeden selže, ostatní normálně proběhnou a selhání se zobrazí v patičce webu.
 
