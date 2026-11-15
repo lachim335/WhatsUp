@@ -304,7 +304,7 @@ function renderFoot() {
   const gen = new Date(feed.generated);
   $("#updated").textContent = `${feed.events.length} akcí na příštích ${Math.round((parse(feed.to) - parse(feed.from)) / DAY / 7)} týdnů · aktualizováno ${fmtStamp.format(gen)}`;
   $("#foot").innerHTML = `Data se stahují automaticky jednou denně z veřejných kalendářů. Před cestou si raději ověř detaily u pořadatele.
-    <ul>${feed.sources.map((s) => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a> · <span class="${s.ok ? "ok" : "err"}">${s.ok ? s.count + " akcí" : "chyba"}</span></li>`).join("")}</ul>`;
+    <ul>${feed.sources.map((s) => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a> · <span class="${s.ok ? "ok" : "err"}">${s.ok ? s.count + " akcí" : s.stale && s.count ? `nedostupný, ${s.count} akcí z minula` : "chyba"}</span></li>`).join("")}</ul>`;
 }
 
 function setToolbarHeight() {

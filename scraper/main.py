@@ -104,6 +104,13 @@ def known_venues(events: list[dict]) -> list[dict]:
     return [{"name": k, "region": v} for k, v in sorted(out.items(), key=lambda kv: fold(kv[0]))]
 
 
+def load_previous(path: Path) -> list[dict]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("events", [])
+    except (OSError, ValueError):
+        return []
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="site/data/events.json")
@@ -116,6 +123,7 @@ def main() -> int:
     horizon_end = today + timedelta(weeks=args.weeks)
 
     merged: dict[str, dict] = {}
+    previous = load_previous(Path(args.out))
     by_slot: dict[str, str] = {}  # date|time|venue -> key, catches the same gig under a different title
     report = []
     for name, home, scrape in SOURCES:
@@ -127,7 +135,13 @@ def main() -> int:
         except Exception as exc:  # one broken source must not kill the feed
             traceback.print_exc()
             entry.update(ok=False, error=f"{type(exc).__name__}: {exc}"[:300])
+            # keep this source's still-upcoming events from the last successful run
+            kept_old = [d for d in previous if d.get("source") == name and (d.get("end_date") or d["date"]) >= today.isoformat()]
+            for d in kept_old:
+                merged.setdefault(f"stale|{d['id']}", d)
+            entry.update(count=len(kept_old), stale=True)
             report.append(entry)
+            print(f"{name}: FAILED, reusing {len(kept_old)} events from the previous run", file=sys.stderr)
             continue
 
         kept = 0
