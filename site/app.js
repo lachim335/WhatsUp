@@ -252,11 +252,31 @@ function bind() {
   window.addEventListener("resize", setToolbarHeight);
 }
 
-async function init() {
+function loadScriptFeed() {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = `data/events.js?v=${Date.now().toString(36)}`;
+    s.onload = () => (window.__FEED__ ? resolve(window.__FEED__) : reject(new Error("prázdná data")));
+    s.onerror = () => reject(new Error("data/events.js nenalezen"));
+    document.head.appendChild(s);
+  });
+}
+
+async function loadFeed() {
+  // file:// blocks fetch(), so load the data as a script there; on a web server prefer JSON.
+  if (location.protocol === "file:") return loadScriptFeed();
   try {
     const r = await fetch(`data/events.json?v=${Date.now().toString(36)}`, { cache: "no-store" });
-    if (!r.ok) throw new Error(r.status);
-    feed = await r.json();
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch {
+    return loadScriptFeed();
+  }
+}
+
+async function init() {
+  try {
+    feed = await loadFeed();
   } catch (err) {
     $("#feed").innerHTML = `<div class="empty">Nepodařilo se načíst program (${esc(err.message)}).</div>`;
     $("#updated").textContent = "";

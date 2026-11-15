@@ -120,7 +120,10 @@ def main() -> int:
     }
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(feed, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    payload = json.dumps(feed, ensure_ascii=False, separators=(",", ":"))
+    out.write_text(payload, encoding="utf-8")
+    # Same data as a script, so the page also works when opened straight from disk (file://).
+    out.with_suffix(".js").write_text(f"window.__FEED__={payload};\n", encoding="utf-8")
     print(f"wrote {len(events)} events -> {out}", file=sys.stderr)
 
     if not events:
