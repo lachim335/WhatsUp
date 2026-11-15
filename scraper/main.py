@@ -35,6 +35,15 @@ SOURCES = [
 ]
 LONG_RUNNING_DAYS = 7
 
+# Venues we scrape directly. Listed in the venue filter even when they have nothing planned.
+KNOWN_VENUES = [
+    ("Nová Osmička", "fm"), ("Klub STOUN", "fm"), ("Kino Vlast", "fm"), ("Národní dům", "fm"),
+    ("Nová scéna Vlast", "fm"), ("Muzeum Beskyd (zámek)", "fm"), ("Městská knihovna F-M", "fm"),
+    ("SVČ Klíč", "fm"), ("Klíček (hernička)", "fm"),
+    ("Stará aréna", "ostrava"), ("Barrák Music Club", "ostrava"), ("Zoo Ostrava", "ostrava"),
+    ("Gong", "ostrava"), ("Velký Svět Techniky", "ostrava"), ("Malý Svět Techniky U6", "ostrava"),
+]
+
 
 def collapse_daily_runs(events: list[Event], min_run: int = 3) -> list[Event]:
     """Some sources list an exhibition as a separate all-day event for every day.
@@ -80,6 +89,19 @@ def unify_venue_names(events) -> None:
     for d in events:
         if d.get("venue"):
             d["venue"] = best[venue_key(d["venue"])]
+
+
+def known_venues(events: list[dict]) -> list[dict]:
+    """All venue names for the filter: those with events now + KNOWN_VENUES (spelled as in the events)."""
+    out: dict[str, str] = {}
+    by_key = {venue_key(d["venue"]): d["venue"] for d in events if d.get("venue")}
+    for name, region in KNOWN_VENUES:
+        out[by_key.get(venue_key(name), name)] = region
+    for d in events:
+        v = d.get("venue") or d.get("city")
+        if v and v not in out:
+            out[v] = d["region"]
+    return [{"name": k, "region": v} for k, v in sorted(out.items(), key=lambda kv: fold(kv[0]))]
 
 
 def main() -> int:
@@ -147,6 +169,7 @@ def main() -> int:
         "from": today.isoformat(),
         "to": horizon_end.isoformat(),
         "sources": report,
+        "venues": known_venues(events),
         "events": events,
     }
     out = Path(args.out)

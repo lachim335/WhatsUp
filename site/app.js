@@ -210,6 +210,9 @@ function render() {
         <button class="btn primary" data-switch-all>Zobrazit všechny dny</button></div>` + html;
     }
   }
+  if (state.venues.size && !visible.some((e) => (e.end_date || e.date) >= today)) {
+    html = `<div class="empty hint">${state.venues.size === 1 ? "Vybrané místo teď nemá" : "Vybraná místa teď nemají"} nic v plánu na příštích ${Math.round((parse(feed.to) - parse(feed.from)) / DAY / 7)} týdnů.</div>`;
+  }
   $("#feed").innerHTML = html;
   $("#feed [data-switch-all]")?.addEventListener("click", () => document.querySelector('.seg [data-mode="all"]').click());
   $("#jump").innerHTML = jump.join("");
@@ -240,22 +243,34 @@ function renderRegions() {
 function renderVenues() {
   const panel = $("#venues");
   if (panel.hidden) return;
-  const counts = new Map();
-  const regionOf = new Map();
+  const counts = new Map();   // events visible in the current view
+  const later = new Map();    // upcoming events hidden by the weekend view
+  const regionOf = new Map((feed.venues || []).map((v) => [v.name, v.region]));
+  for (const v of regionOf.keys()) counts.set(v, 0);
   for (const e of feed.events) {
-    if (!inView(e) || !matches(e, { ignoreVenues: true })) continue;
+    if ((e.end_date || e.date) < today || !matches(e, { ignoreVenues: true })) continue;
     const v = venueOf(e);
-    counts.set(v, (counts.get(v) || 0) + 1);
     if (!regionOf.has(v)) regionOf.set(v, e.region);
+    if (!counts.has(v)) counts.set(v, 0);
+    if (inView(e)) counts.set(v, counts.get(v) + 1);
+    else later.set(v, (later.get(v) || 0) + 1);
   }
   for (const v of state.venues) if (!counts.has(v)) { counts.set(v, 0); regionOf.set(v, "okoli"); }
   const q = fold(state.vq);
   const groups = { ostrava: [], fm: [], okoli: [] };
-  for (const [v, n] of counts) if (!q || fold(v).includes(q)) groups[regionOf.get(v) || "okoli"].push([v, n]);
+  for (const [v, n] of counts) {
+    const r = regionOf.get(v) || "okoli";
+    if (state.region !== "all" && r !== state.region && !state.venues.has(v)) continue;
+    // zero-count venues: always show known venues, hide incidental ones only when other filters are active
+    if (!n && !later.get(v) && !(feed.venues || []).some((x) => x.name === v) && !state.venues.has(v)) continue;
+    if (!q || fold(v).includes(q)) groups[r].push([v, n]);
+  }
   const html = Object.entries(groups).filter(([, l]) => l.length).map(([r, list]) => {
-    list.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "cs"));
-    return `<fieldset><legend>${REGIONS[r]} <span>${list.length}</span></legend>${list.map(([v, n]) =>
-      `<label class="vopt${n ? "" : " zero"}"><input type="checkbox" value="${esc(v)}"${state.venues.has(v) ? " checked" : ""}><span class="vname">${esc(v)}</span><span class="n">${n}</span></label>`).join("")}</fieldset>`;
+    list.sort((a, b) => (!a[1]) - (!b[1]) || b[1] - a[1] || a[0].localeCompare(b[0], "cs"));
+    return `<fieldset><legend>${REGIONS[r]} <span>${list.length}</span></legend>${list.map(([v, n]) => {
+      const note = n ? n : later.get(v) ? `<em>jen v týdnu</em>` : `<em>nic v plánu</em>`;
+      return `<label class="vopt${n ? "" : " zero"}"><input type="checkbox" value="${esc(v)}"${state.venues.has(v) ? " checked" : ""}><span class="vname">${esc(v)}</span><span class="n">${note}</span></label>`;
+    }).join("")}</fieldset>`;
   }).join("");
   $("#venues-body").innerHTML = html || `<div class="empty">Žádné místo neodpovídá hledání.</div>`;
 }

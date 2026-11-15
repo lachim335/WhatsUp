@@ -26,7 +26,6 @@ def scrape(today: date, horizon_end: date) -> list[Event]:
                 continue
             tags = [t.get("name", "") for t in e.get("tags") or []]
             cat_name = (e.get("category") or {}).get("name")
-            loc = (e.get("location") or {}).get("name")
             start, end = e["date_from"], e.get("date_to")
             events.append(Event(
                 title=clean(e["name"]),
@@ -34,7 +33,7 @@ def scrape(today: date, horizon_end: date) -> list[Event]:
                 end_date=end if end and end != start else None,
                 time=_time(e.get("time_from")),
                 end_time=_time(e.get("time_to")) if not end or end == start else None,
-                venue=f"Nová Osmička – {loc}" if loc else "Nová Osmička",
+                venue="Nová Osmička",  # one name, so the venue filter groups all its stages
                 city="Frýdek-Místek",
                 region="fm",
                 category=categorize(cat_name, " ".join(tags), e["name"]),
