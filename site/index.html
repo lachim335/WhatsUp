@@ -35,6 +35,18 @@
         </div>
       </div>
       <div class="row chips" id="regions" role="group" aria-label="Město"></div>
+      <div class="venues" id="venues" hidden>
+        <div class="venues-head">
+          <div class="search small">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="vq" type="search" placeholder="Najít místo…" autocomplete="off">
+          </div>
+          <button class="btn" id="v-all">Vybrat zobrazená</button>
+          <button class="btn" id="v-none">Zrušit výběr</button>
+          <button class="btn primary" id="v-close">Hotovo</button>
+        </div>
+        <div class="venues-body" id="venues-body"></div>
+      </div>
       <div class="row chips scroll" id="cats" role="group" aria-label="Kategorie"></div>
       <nav class="row chips scroll jump" id="jump" aria-label="Přejít na"></nav>
     </div>

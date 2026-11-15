@@ -9,20 +9,27 @@ import json
 import sys
 import traceback
 import zlib
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .common import Event, dedupe_key, fold
-from .sources import kudyznudy, kulturafm, ostravainfo
+from .common import Event, dedupe_key, fold, venue_key
+from .sources import ics, jsonld, kudyznudy, kulturafm, novaosmicka, ostravainfo
 
 TZ = ZoneInfo("Europe/Prague")
-# Order = priority when the same event appears in several sources.
+
+# (name, homepage, scrape(today, horizon_end) -> list[Event])
+# Order = priority when the same event appears in several sources: venue's own data first,
+# aggregators last (they fill in missing images/descriptions).
 SOURCES = [
-    (ostravainfo, "https://www.ostravainfo.cz/cz/akce/"),
-    (kulturafm, "https://www.kulturafm.cz/program"),
-    (kudyznudy, "https://www.kudyznudy.cz/kalendar-akci/moravskoslezsky-kraj"),
+    (kulturafm.NAME, "https://www.kulturafm.cz/program", kulturafm.scrape),
+    (novaosmicka.NAME, novaosmicka.HOME, novaosmicka.scrape),
+    ics.feed("stoun.cz", "https://www.stoun.cz/program.ics", home="https://www.stoun.cz/program",
+             venue="Klub STOUN", city="Frýdek-Místek", images=True),
+    jsonld.page("barrak-club.cz", "https://www.barrak-club.cz/cz", venue="Barrák Music Club", city="Ostrava"),
+    (ostravainfo.NAME, "https://www.ostravainfo.cz/cz/akce/", ostravainfo.scrape),
+    (kudyznudy.NAME, "https://www.kudyznudy.cz/kalendar-akci/moravskoslezsky-kraj", kudyznudy.scrape),
 ]
 LONG_RUNNING_DAYS = 7
 
@@ -60,11 +67,24 @@ def collapse_daily_runs(events: list[Event], min_run: int = 3) -> list[Event]:
     return rest
 
 
+def unify_venue_names(events) -> None:
+    """Different sources spell the same place differently ('BARRÁK Music Club' vs 'Barrák Music Club').
+    Use one spelling per venue so the venue filter groups them together."""
+    spellings: dict[str, Counter] = defaultdict(Counter)
+    for d in events:
+        if d.get("venue"):
+            spellings[venue_key(d["venue"])][d["venue"]] += 1
+    best = {k: max(c, key=lambda v: (c[v], -sum(ch.isupper() for ch in v))) for k, c in spellings.items()}
+    for d in events:
+        if d.get("venue"):
+            d["venue"] = best[venue_key(d["venue"])]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="site/data/events.json")
     ap.add_argument("--weeks", type=int, default=5, help="how far ahead to keep events")
-    ap.add_argument("--only", help="run a single source (module name), for debugging")
+    ap.add_argument("--only", help="run only sources whose name contains this, for debugging")
     args = ap.parse_args()
 
     now = datetime.now(TZ)
@@ -72,13 +92,14 @@ def main() -> int:
     horizon_end = today + timedelta(weeks=args.weeks)
 
     merged: dict[str, dict] = {}
+    by_slot: dict[str, str] = {}  # date|time|venue -> key, catches the same gig under a different title
     report = []
-    for module, home in SOURCES:
-        if args.only and module.__name__.rsplit(".", 1)[-1] != args.only:
+    for name, home, scrape in SOURCES:
+        if args.only and args.only not in name:
             continue
-        entry = {"name": module.NAME, "url": home, "count": 0, "ok": True}
+        entry = {"name": name, "url": home, "count": 0, "ok": True}
         try:
-            events = collapse_daily_runs(module.scrape(today, horizon_end))
+            events = collapse_daily_runs(scrape(today, horizon_end))
         except Exception as exc:  # one broken source must not kill the feed
             traceback.print_exc()
             entry.update(ok=False, error=f"{type(exc).__name__}: {exc}"[:300])
@@ -91,10 +112,13 @@ def main() -> int:
             if last_day < today.isoformat() or e.date > horizon_end.isoformat():
                 continue
             key = dedupe_key(e)
+            slot = f"{e.date}|{e.time}|{venue_key(e.venue)}" if e.time and venue_key(e.venue) else None
+            if key not in merged and slot in by_slot:
+                key = by_slot[slot]
             if key in merged:
                 # keep the higher-priority record, but borrow missing bits from this one
                 prev = merged[key]
-                for f in ("image", "description", "tickets", "time", "venue"):
+                for f in ("image", "description", "tickets", "time"):
                     val = getattr(e, f)
                     if val and not prev.get(f):
                         prev[f] = val
@@ -103,13 +127,16 @@ def main() -> int:
             span = (date.fromisoformat(last_day) - date.fromisoformat(e.date)).days
             if span > LONG_RUNNING_DAYS:
                 d["long"] = True
-            d["id"] = f"{module.__name__.rsplit('.', 1)[-1]}-{zlib.crc32(key.encode()):08x}"
+            d["id"] = f"{zlib.crc32((name + key).encode()):08x}"
             merged[key] = d
+            if slot:
+                by_slot[slot] = key
             kept += 1
         entry["count"] = kept
         report.append(entry)
-        print(f"{module.NAME}: {len(events)} scraped, {kept} kept", file=sys.stderr)
+        print(f"{name}: {len(events)} scraped, {kept} kept", file=sys.stderr)
 
+    unify_venue_names(merged.values())
     events = sorted(merged.values(), key=lambda d: (d["date"], d.get("time") or "99:99", d["title"]))
     feed = {
         "generated": now.isoformat(timespec="seconds"),

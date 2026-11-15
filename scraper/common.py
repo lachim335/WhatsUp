@@ -1,6 +1,7 @@
 """Shared helpers: HTTP session, Czech date parsing, category normalisation."""
 from __future__ import annotations
 
+import html
 import re
 import time
 import unicodedata
@@ -81,7 +82,10 @@ def fold(text: str) -> str:
 
 
 def shorten(text: str | None, limit: int = 260) -> str | None:
-    text = clean(text)
+    if text and "<" in text:
+        text = re.sub(r"<(br|/p|/div|/li)[^>]*>", " ", text, flags=re.I)
+        text = re.sub(r"<[^>]+>", "", text)
+    text = clean(html.unescape(text or ""))
     if not text:
         return None
     if len(text) <= limit:
@@ -193,3 +197,15 @@ def region_for_city(city: str | None) -> str:
 
 def dedupe_key(e: Event) -> str:
     return re.sub(r"[^a-z0-9]", "", fold(e.title))[:60] + "|" + e.date
+
+
+_VENUE_NOISE = re.compile(r"\b(music|club|klub|hudebni|the|ostrava|bývalá|byvala|\(.*?\))\b")
+
+
+def venue_key(venue: str | None) -> str:
+    """Spelling-insensitive key for a venue: 'BARRÁK Music Club' == 'Barrák music club' == 'Barrák'."""
+    if not venue:
+        return ""
+    v = re.sub(r"\(.*?\)", "", fold(venue))
+    v = _VENUE_NOISE.sub(" ", v)
+    return re.sub(r"[^a-z0-9]", "", v)

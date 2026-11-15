@@ -30,6 +30,8 @@ const state = {
   mode: store.get("mode", "weekend"),
   region: store.get("region", "all"),
   cats: new Set(store.get("cats", [])),
+  venues: new Set(store.get("venues", [])),
+  vq: "",
   tips: false,
   q: "",
 };
@@ -68,9 +70,13 @@ function rangeLabel(days, short = false) {
 
 // ------------------------------------------------------------------ filtering
 
-function matches(e, { ignoreCats = false } = {}) {
+/** Venue label used for the venue filter (aggregator events without a venue fall back to the town). */
+const venueOf = (e) => e.venue || e.city || "Neuvedeno";
+
+function matches(e, { ignoreCats = false, ignoreVenues = false } = {}) {
   if (state.region !== "all" && e.region !== state.region) return false;
   if (!ignoreCats && state.cats.size && !state.cats.has(e.category)) return false;
+  if (!ignoreVenues && state.venues.size && !state.venues.has(venueOf(e))) return false;
   if (state.tips && !e.top) return false;
   if (state.q) {
     const hay = fold(`${e.title} ${e.venue || ""} ${e.city || ""} ${e.description || ""} ${CATS[e.category] || ""}`);
@@ -192,7 +198,50 @@ function renderRegions() {
   $("#regions").innerHTML = Object.entries(REGIONS)
     .filter(([k]) => k === "all" || counts[k])
     .map(([k, label]) => `<button class="chip${state.region === k ? " on" : ""}" data-region="${k}">${label}</button>`)
-    .join("") + `<button class="chip star${state.tips ? " on" : ""}" data-tips>★ Jen tipy</button>`;
+    .join("") +
+    `<button class="chip star${state.tips ? " on" : ""}" data-tips>★ Jen tipy</button>` +
+    `<button class="chip venue-btn${state.venues.size ? " on" : ""}" data-venues aria-expanded="${!$("#venues").hidden}" aria-controls="venues">
+       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+       ${state.venues.size ? `Místa: ${state.venues.size}` : "Místa"}</button>` +
+    (state.venues.size ? `<button class="chip clear" data-clear-venues aria-label="Zrušit výběr míst">✕</button>` : "");
+}
+
+function renderVenues() {
+  const panel = $("#venues");
+  if (panel.hidden) return;
+  const counts = new Map();
+  const regionOf = new Map();
+  for (const e of feed.events) {
+    if ((e.end_date || e.date) < today || !matches(e, { ignoreVenues: true })) continue;
+    const v = venueOf(e);
+    counts.set(v, (counts.get(v) || 0) + 1);
+    if (!regionOf.has(v)) regionOf.set(v, e.region);
+  }
+  for (const v of state.venues) if (!counts.has(v)) { counts.set(v, 0); regionOf.set(v, "okoli"); }
+  const q = fold(state.vq);
+  const groups = { ostrava: [], fm: [], okoli: [] };
+  for (const [v, n] of counts) if (!q || fold(v).includes(q)) groups[regionOf.get(v) || "okoli"].push([v, n]);
+  const html = Object.entries(groups).filter(([, l]) => l.length).map(([r, list]) => {
+    list.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "cs"));
+    return `<fieldset><legend>${REGIONS[r]} <span>${list.length}</span></legend>${list.map(([v, n]) =>
+      `<label class="vopt${n ? "" : " zero"}"><input type="checkbox" value="${esc(v)}"${state.venues.has(v) ? " checked" : ""}><span class="vname">${esc(v)}</span><span class="n">${n}</span></label>`).join("")}</fieldset>`;
+  }).join("");
+  $("#venues-body").innerHTML = html || `<div class="empty">Žádné místo neodpovídá hledání.</div>`;
+}
+
+function toggleVenuePanel(open = $("#venues").hidden) {
+  $("#venues").hidden = !open;
+  renderRegions();
+  renderVenues();
+  setToolbarHeight();
+  if (open) $("#vq").focus({ preventScroll: true });
+}
+
+function venuesChanged() {
+  store.set("venues", [...state.venues]);
+  renderRegions();
+  renderVenues();
+  render();
 }
 
 function renderCats() {
@@ -232,22 +281,37 @@ function bind() {
   });
   $("#regions").addEventListener("click", (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
+    if ("venues" in b.dataset) return toggleVenuePanel();
+    if ("clearVenues" in b.dataset) { state.venues.clear(); return venuesChanged(); }
     if ("tips" in b.dataset) state.tips = !state.tips;
     else { state.region = b.dataset.region; store.set("region", state.region); }
-    renderRegions(); render();
+    renderRegions(); renderVenues(); render();
   });
+  $("#venues-body").addEventListener("change", (ev) => {
+    const cb = ev.target.closest("input[type=checkbox]"); if (!cb) return;
+    cb.checked ? state.venues.add(cb.value) : state.venues.delete(cb.value);
+    venuesChanged();
+  });
+  $("#vq").addEventListener("input", (ev) => { state.vq = ev.target.value.trim(); renderVenues(); });
+  $("#v-all").addEventListener("click", () => {
+    document.querySelectorAll("#venues-body input[type=checkbox]").forEach((cb) => state.venues.add(cb.value));
+    venuesChanged();
+  });
+  $("#v-none").addEventListener("click", () => { state.venues.clear(); venuesChanged(); });
+  $("#v-close").addEventListener("click", () => toggleVenuePanel(false));
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("#venues").hidden) toggleVenuePanel(false); });
   $("#cats").addEventListener("click", (ev) => {
     const b = ev.target.closest("button"); if (!b) return;
     const k = b.dataset.cat;
     if (!k) state.cats.clear();
     else state.cats.has(k) ? state.cats.delete(k) : state.cats.add(k);
     store.set("cats", [...state.cats]);
-    render();
+    renderVenues(); render();
   });
   let t;
   $("#q").addEventListener("input", (ev) => {
     clearTimeout(t);
-    t = setTimeout(() => { state.q = ev.target.value.trim(); render(); }, 120);
+    t = setTimeout(() => { state.q = ev.target.value.trim(); renderVenues(); render(); }, 120);
   });
   window.addEventListener("resize", setToolbarHeight);
 }
