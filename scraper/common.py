@@ -165,11 +165,12 @@ CATEGORY_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("divadlo", ("divadl", "muzikal", "opera", "balet", "predstaveni", "stand-up", "standup", "comedy", "kabaret")),
     ("film", ("film", "kino", "promitan")),
     ("vystavy", ("vystav", "expozic", "galeri", "vernisaz")),
-    ("trhy", ("advent", "vanocni trh", "vanocni mestec", "vanocni jarmark", "vanoce v ", "vanoce na ", "ostravske vanoce", "jarmark", "trhy", "trh ", "trziste", "gastro", "food", "pivni", "slavnost", "posviceni", "masopust", "rozsvec")),
+    ("trhy", ("advent", "vanocni trh", "vanocni mestec", "vanocni jarmark", "vanoce v ", "vanoce na ", "ostravske vanoce", "jarmark", "trhy", "trh ", "trziste", "gastro", "food", "pivni", "slavnost", "posviceni", "masopust", "rozsvec", "rozsvic", " pout", "burza", "vlacek")),
     ("festivaly", ("festival",)),
-    ("sport", ("sport", "pohyb", "zavod", "beh ", "hokej", "fotbal", "turnaj", "cviceni", "hc ", " fc ")),
-    ("prednasky", ("besed", "predn", "prochaz", "komentovan", "workshop", "kurz", "dilna", "cestovat")),
-    ("tanec", ("tanec", "tanecn", "ples", "disco", "party", "zabava")),
+    ("sport", ("sport", "pohyb", "zavod", "beh ", "hokej", "fotbal", "turnaj", "cviceni", "hc ", " fc ", " fk ")),
+    ("prednasky", ("besed", "predn", "prochaz", "komentovan", "prohlid", "workshop", "kurz", "dilna", "cestovat",
+                   "krest knihy", "s autor", "poezie", "literatur", "muzeum meteorit", "smaltovan", "malovani")),
+    ("tanec", ("tanec", "tanecn", "tancirn", "ples", "disco", "party", "zabava", "dnb", "swing")),
 ]
 
 

@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 import traceback
 import zlib
@@ -15,7 +17,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .common import Event, adult_only, dedupe_key, fold, looks_like_kids, venue_key
-from .sources import ics, jsonld, kudyznudy, kulturafm, novaosmicka, ostravainfo, rodina, staraarena
+from .sources import ics, jsonld, kudyznudy, kulturafm, novaosmicka, ostravainfo, rodina, staraarena, visitfm
 
 TZ = ZoneInfo("Europe/Prague")
 
@@ -30,6 +32,7 @@ SOURCES = [
     (staraarena.NAME, staraarena.HOME, staraarena.scrape),
     jsonld.page("barrak-club.cz", "https://www.barrak-club.cz/cz", venue="Barrák Music Club", city="Ostrava"),
     *rodina.SOURCES,  # zoo, Dolní Vítkovice, Muzeum Beskyd, knihovna F-M, SVČ Klíč
+    (visitfm.NAME, visitfm.HOME, visitfm.scrape),  # F-M + Beskydy (Hukvaldy, Čeladná…)
     (ostravainfo.NAME, "https://www.ostravainfo.cz/cz/akce/", ostravainfo.scrape),
     (kudyznudy.NAME, "https://www.kudyznudy.cz/kalendar-akci/moravskoslezsky-kraj", kudyznudy.scrape),
 ]
@@ -104,6 +107,34 @@ def known_venues(events: list[dict]) -> list[dict]:
     return [{"name": k, "region": v} for k, v in sorted(out.items(), key=lambda kv: fold(kv[0]))]
 
 
+def title_key(title: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", fold(title))
+
+
+def _minutes(t: str | None) -> int | None:
+    return int(t[:2]) * 60 + int(t[3:5]) if t else None
+
+
+def similar_on_same_day(e: Event, seen: list[tuple[str, str | None, str]]) -> str | None:
+    """Same event from another source with a slightly different title:
+    'Vánoční jarmark na frýdeckém zámku' vs '… 2026', 'Duna: Double feature' vs '… | Část první'.
+    One title must start with the other (≥ 12 chars) or share a long start (≥ 28 chars),
+    and start times may differ by ≤ 30 min."""
+    t = title_key(e.title)
+    if len(t) < 12:
+        return None
+    m = _minutes(e.time)
+    for other, other_time, key in seen:
+        short, long_ = sorted((t, other), key=len)
+        common = len(os.path.commonprefix((t, other)))
+        if not ((len(short) >= 12 and long_.startswith(short)) or common >= 28):
+            continue
+        om = _minutes(other_time)
+        if m is None or om is None or abs(m - om) <= 30:
+            return key
+    return None
+
+
 def load_previous(path: Path) -> list[dict]:
     try:
         return json.loads(path.read_text(encoding="utf-8")).get("events", [])
@@ -125,6 +156,7 @@ def main() -> int:
     merged: dict[str, dict] = {}
     previous = load_previous(Path(args.out))
     by_slot: dict[str, str] = {}  # date|time|venue -> key, catches the same gig under a different title
+    by_day: dict[str, list[tuple[str, str | None, str]]] = defaultdict(list)  # date -> (title, time, key)
     report = []
     for name, home, scrape in SOURCES:
         if args.only and args.only not in name:
@@ -153,6 +185,8 @@ def main() -> int:
             slot = f"{e.date}|{e.time}|{venue_key(e.venue)}" if e.time and venue_key(e.venue) else None
             if key not in merged and slot in by_slot:
                 key = by_slot[slot]
+            if key not in merged:
+                key = similar_on_same_day(e, by_day[e.date]) or key
             if key in merged:
                 # keep the higher-priority record, but borrow missing bits from this one
                 prev = merged[key]
@@ -171,6 +205,7 @@ def main() -> int:
             merged[key] = d
             if slot:
                 by_slot[slot] = key
+            by_day[e.date].append((title_key(e.title), e.time, key))
             kept += 1
         entry["count"] = kept
         report.append(entry)

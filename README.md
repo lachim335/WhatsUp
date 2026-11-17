@@ -17,6 +17,7 @@ Tmavý web s přehledem kulturních akcí na nadcházející víkendy. Data se k
 | [muzeumbeskyd.com](https://www.muzeumbeskyd.com/program/akce/) | Muzeum Beskyd (zámek F-M) |
 | [knihovnafm.cz](https://www.knihovnafm.cz/akce/) | Městská knihovna F-M |
 | [klicfm.cz](https://www.klicfm.cz/akce) | SVČ Klíč F-M: akce pro děti s věkovým rozmezím |
+| [visitfm.cz](https://www.visitfm.cz/cz/kalendar-akci) | TIC Frýdek-Místek: akce v F-M a okolí (Hukvaldy, Čeladná, Baška…) |
 | [kudyznudy.cz](https://www.kudyznudy.cz/kalendar-akci/moravskoslezsky-kraj) | doplněk: jarmarky, trhy, akce v Ostravsku a Beskydech |
 
 Akce pro děti se poznají podle zdroje (kategorie, věk) a podle názvu nebo místa (pohádka, Mikuláš, Divadlo loutek, zoo, Svět techniky…). Akce zjevně pro dospělé (stand-up, burleska, 18+) se nikdy jako dětské neoznačí. Pravidla jsou v `looks_like_kids()` a `adult_only()` v `scraper/common.py`.
