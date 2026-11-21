@@ -7,6 +7,9 @@ from __future__ import annotations
 
 from datetime import date
 
+import time
+
+import requests
 from bs4 import BeautifulSoup
 
 from ..common import Event, categorize, clean, fetch, parse_czech_range
@@ -16,6 +19,7 @@ HOME = "https://www.gotobrno.cz/kalendar-akci/"
 LIST = "https://www.gotobrno.cz/kalendar-akci/?pageload={off}&date={day}&type=table{cat}"
 XHR = {"X-Requested-With": "XMLHttpRequest"}
 MAX_PAGES = 80  # 9 items each
+TAG_BUDGET = 240  # seconds; the category passes are skipped when the site is slow
 # their category slug -> ours (first match wins). "Pro rodiny" is broad (markets, Christmas
 # fair…), so it only sets the kids flag and the category comes from the title.
 CATEGORY_PASSES = [("divadlo", "divadlo"), ("hudba", "hudba"), ("vystava", "vystavy"),
@@ -45,9 +49,17 @@ def _items(html: str):
 def _walk(today: date, horizon_end: date, cat: str = ""):
     """Yield list items until the list moves past the horizon."""
     seen: set[str] = set()
+    failures = 0
     for page in range(MAX_PAGES):
-        html = fetch(LIST.format(off=page * 9, day=today.isoformat(), cat=f"&cat={cat}" if cat else ""),
-                     headers=XHR)
+        url = LIST.format(off=page * 9, day=today.isoformat(), cat=f"&cat={cat}" if cat else "")
+        try:
+            html = fetch(url, headers=XHR, timeout=45, retries=3)
+        except requests.RequestException:
+            # the site is sometimes slow; lose one page of 9 rather than the whole calendar
+            failures += 1
+            if failures > 3:
+                raise
+            continue
         batch = [i for i in _items(html) if i["url"] not in seen]
         if not batch:
             return
@@ -63,14 +75,27 @@ def _walk(today: date, horizon_end: date, cat: str = ""):
 
 
 def scrape(today: date, horizon_end: date) -> list[Event]:
-    family = {item["url"] for item in _walk(today, horizon_end, FAMILY)}
+    t0 = time.monotonic()
+    items = list(_walk(today, horizon_end))  # the calendar itself – must succeed
+
+    # Category passes only add tags. When the site is slow (it sometimes takes 7 s a page)
+    # or a pass fails, stop and fall back to guessing the category from the title.
+    family: set[str] = set()
     cat_of: dict[str, str] = {}
-    for slug, ours in CATEGORY_PASSES:
-        for item in _walk(today, horizon_end, slug):
-            cat_of.setdefault(item["url"], ours)
+    try:
+        for slug, ours in [(FAMILY, None), *CATEGORY_PASSES]:
+            for item in _walk(today, horizon_end, slug):
+                if time.monotonic() - t0 > TAG_BUDGET:
+                    raise TimeoutError
+                if ours:
+                    cat_of.setdefault(item["url"], ours)
+                else:
+                    family.add(item["url"])
+    except (requests.RequestException, TimeoutError):
+        pass
 
     events: list[Event] = []
-    for item in _walk(today, horizon_end):
+    for item in items:
         # one line per date ('21. listopad 2026', '12. prosinec 2026'), or a range on one line
         for when in item["dates"]:
             parsed = parse_czech_range(when, today)
