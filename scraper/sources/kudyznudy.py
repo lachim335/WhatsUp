@@ -7,14 +7,21 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
-from ..common import Event, categorize, clean, fetch, region_for_city, shorten
+from ..common import Event, categorize, clean, fetch, fold, region_for_city, shorten
 
 NAME = "kudyznudy.cz"
 BASE = "https://www.kudyznudy.cz/"
+# area page -> region for its events (None = decide by city)
 AREAS = [
-    "kalendar-akci/moravskoslezsky-kraj/ostravsko",
-    "kalendar-akci/moravskoslezsky-kraj/beskydy-a-valassko",
+    ("kalendar-akci/moravskoslezsky-kraj/ostravsko", None),
+    ("kalendar-akci/moravskoslezsky-kraj/beskydy-a-valassko", None),
+    ("kalendar-akci/jihomoravsky-kraj/brno-a-okoli", "brno"),
+    ("kalendar-akci/kraj-vysocina/koruna-vysociny", "bystrice"),
 ]
+# Koruna Vysočiny reaches up to Žďár; keep only Bystřice and the villages around it.
+BYSTRICKO = ("bystrice nad pern", "rozna", "vir", "nedvedice", "pernstejn", "strazek", "rovecne",
+             "dolni rozinka", "doubravnik", "cernvir", "zvole", "rozsochy", "jimramov", "dalecin",
+             "stepanov", "lisek", "vechnov", "ujcov", "kozlov", "dvoriste", "lesoňovice")
 
 
 def _meta(item, prop: str) -> str | None:
@@ -24,7 +31,7 @@ def _meta(item, prop: str) -> str | None:
 
 def scrape(today: date, horizon_end: date) -> list[Event]:
     events: list[Event] = []
-    for area in AREAS:
+    for area, region in AREAS:
         soup = BeautifulSoup(fetch(urljoin(BASE, area)), "html.parser")
         for item in soup.select('[itemtype$="schema.org/Event"]'):
             name = item.select_one('[itemprop="name"]')
@@ -35,6 +42,8 @@ def scrape(today: date, horizon_end: date) -> list[Event]:
             end = _meta(item, "endDate")
             loc = item.select_one('[itemprop="location"] [itemprop="name"]')
             city = clean(loc.get_text()).split(",")[0] if loc else None
+            if region == "bystrice" and not (city and fold(city).startswith(BYSTRICKO)):
+                continue
             img = item.select_one("img[src]")
             title = clean(name.get_text())
             desc = _meta(item, "description")
@@ -44,7 +53,7 @@ def scrape(today: date, horizon_end: date) -> list[Event]:
                 end_date=end[:10] if end and end[:10] != start[:10] else None,
                 city=city,
                 venue=None,
-                region=region_for_city(city),
+                region=region or region_for_city(city),
                 category=categorize(title, desc),
                 url=urljoin(BASE, link["href"]),
                 image=img["src"] if img else None,

@@ -5,7 +5,7 @@ const CATS = {
   deti: "Pro děti", trhy: "Trhy & advent", festivaly: "Festivaly", sport: "Sport",
   prednasky: "Přednášky & prohlídky", tanec: "Tanec & party", ostatni: "Ostatní",
 };
-const REGIONS = { all: "Vše", ostrava: "Ostrava", fm: "Frýdek-Místek", okoli: "Okolí" };
+const REGIONS = { all: "Vše", ostrava: "Ostrava", fm: "Frýdek-Místek", okoli: "Okolí", brno: "Brno", bystrice: "Bystřice n. P." };
 const DAY = 864e5;
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -257,7 +257,7 @@ function renderVenues() {
   }
   for (const v of state.venues) if (!counts.has(v)) { counts.set(v, 0); regionOf.set(v, "okoli"); }
   const q = fold(state.vq);
-  const groups = { ostrava: [], fm: [], okoli: [] };
+  const groups = Object.fromEntries(Object.keys(REGIONS).filter((k) => k !== "all").map((k) => [k, []]));
   for (const [v, n] of counts) {
     const r = regionOf.get(v) || "okoli";
     if (state.region !== "all" && r !== state.region && !state.venues.has(v)) continue;

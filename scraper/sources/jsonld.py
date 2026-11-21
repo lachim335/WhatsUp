@@ -54,7 +54,8 @@ def _first(x):
     return x[0] if isinstance(x, list) and x else x
 
 
-def page(name: str, url: str, *, venue: str, city: str, default_category: str = "hudba"):
+def page(name: str, url: str, *, venue: str, city: str, default_category: str = "hudba",
+         category: str | None = None):
     """Build a source entry (name, homepage, scrape function) for one page with JSON-LD events."""
 
     def scrape(today: date, horizon_end: date) -> list[Event]:
@@ -86,7 +87,7 @@ def page(name: str, url: str, *, venue: str, city: str, default_category: str = 
                 venue=venue,
                 city=city,
                 region=region_for_city(city),
-                category=(c if (c := categorize(title)) != "ostatni" else default_category),
+                category=category or (c if (c := categorize(title)) != "ostatni" else default_category),
                 url=urljoin(url, link),
                 image=urljoin(url, image) if isinstance(image, str) else None,
                 description=shorten(html.unescape(ev.get("description") or "")),

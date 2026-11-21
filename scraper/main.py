@@ -17,7 +17,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .common import Event, adult_only, dedupe_key, fold, looks_like_kids, venue_key
-from .sources import ics, jsonld, kudyznudy, kulturafm, novaosmicka, ostravainfo, rodina, staraarena, visitfm
+from .sources import (brno, bystrice, gotobrno, ics, jfo, jsonld, kudyznudy, kulturafm, novaosmicka, ostravainfo,
+                      rodina, staraarena, visitfm)
 
 TZ = ZoneInfo("Europe/Prague")
 
@@ -33,8 +34,14 @@ SOURCES = [
     jsonld.page("barrak-club.cz", "https://www.barrak-club.cz/cz", venue="Barrák Music Club", city="Ostrava"),
     *rodina.SOURCES,  # zoo, Dolní Vítkovice, Muzeum Beskyd, knihovna F-M, SVČ Klíč
     (visitfm.NAME, visitfm.HOME, visitfm.scrape),  # F-M + Beskydy (Hukvaldy, Čeladná…)
+    (jfo.NAME, jfo.HOME, jfo.scrape),  # Janáčkova filharmonie Ostrava
     (ostravainfo.NAME, "https://www.ostravainfo.cz/cz/akce/", ostravainfo.scrape),
     (kudyznudy.NAME, "https://www.kudyznudy.cz/kalendar-akci/moravskoslezsky-kraj", kudyznudy.scrape),
+    *brno.SOURCES,  # Fléda, Kabinet MÚZ, Stará Pekárna, Zoo Brno
+    jsonld.page("kinoscala.cz", "https://www.kinoscala.cz/cz/program", venue="Kino Scala", city="Brno",
+                category="film"),
+    (gotobrno.NAME, gotobrno.HOME, gotobrno.scrape),  # Brno – city calendar
+    *bystrice.SOURCES,  # Bystřice nad Pernštejnem + Bystřicko/Nedvědicko
 ]
 LONG_RUNNING_DAYS = 7
 
@@ -45,6 +52,9 @@ KNOWN_VENUES = [
     ("SVČ Klíč", "fm"), ("Klíček (hernička)", "fm"),
     ("Stará aréna", "ostrava"), ("Barrák Music Club", "ostrava"), ("Zoo Ostrava", "ostrava"),
     ("Gong", "ostrava"), ("Velký Svět Techniky", "ostrava"), ("Malý Svět Techniky U6", "ostrava"),
+    ("Janáčkova filharmonie", "ostrava"),
+    ("Fléda", "brno"), ("Kabinet MÚZ", "brno"), ("Stará Pekárna", "brno"), ("Zoo Brno", "brno"),
+    ("Kino Scala", "brno"), ("Kulturní dům Bystřice", "bystrice"),
 ]
 
 
@@ -115,19 +125,37 @@ def _minutes(t: str | None) -> int | None:
     return int(t[:2]) * 60 + int(t[3:5]) if t else None
 
 
-def similar_on_same_day(e: Event, seen: list[tuple[str, str | None, str]]) -> str | None:
+_STOP = {"2025", "2026", "2027", "2028", "nebo", "pres", "jako", "kdyz"}
+# stems too generic to identify an event: a match needs at least one stem outside this set
+_GENERIC = {"vano", "adve", "konc", "vyst", "jarm", "trhy", "diva", "kino", "poha", "proh", "pred", "work",
+            "diln", "sess", "kres", "miku", "silv", "ples", "fest", "show", "part", "tour", "live", "vece",
+            "noc", "koled", "tvor", "rodi", "deti", "jazz", "rock", "punk", "meta", "folk", "sbor"}
+
+
+def stems(title: str) -> frozenset[str]:
+    """Czech-ish word stems: 'Vánoční jarmark v Rožné' and 'Vánoční jarmark (Rožná)' -> {vano, jarm, rozn}."""
+    words = re.findall(r"[a-z0-9]+", fold(title))
+    return frozenset(w[:4] for w in words if len(w) >= 4 and w not in _STOP)
+
+
+def similar_on_same_day(e: Event, seen: list[tuple]) -> str | None:
     """Same event from another source with a slightly different title:
     'Vánoční jarmark na frýdeckém zámku' vs '… 2026', 'Duna: Double feature' vs '… | Část první'.
-    One title must start with the other (≥ 12 chars) or share a long start (≥ 28 chars),
-    and start times may differ by ≤ 30 min."""
+    One title must start with the other (≥ 12 chars) or share a long start (≥ 28 chars).
+    Or, in the same town, all word stems of one title appear in the other
+    ('Věneček' / 'Věneček 2026', 'Dřevorubec' / 'Kinokavárna - Dřevorubec').
+    Start times may differ by ≤ 30 min."""
     t = title_key(e.title)
-    if len(t) < 12:
-        return None
+    st, city = stems(e.title), fold(e.city or "")
     m = _minutes(e.time)
-    for other, other_time, key in seen:
+    for other, other_time, key, other_st, other_city in seen:
         short, long_ = sorted((t, other), key=len)
         common = len(os.path.commonprefix((t, other)))
-        if not ((len(short) >= 12 and long_.startswith(short)) or common >= 28):
+        prefix = len(t) >= 12 and ((len(short) >= 12 and long_.startswith(short)) or common >= 28)
+        small, big = sorted((st, other_st), key=len)
+        words = (city and city == other_city and small and small <= big and small - _GENERIC
+                 and (len(small) >= 2 or len(short) >= 6))
+        if not (prefix or words):
             continue
         om = _minutes(other_time)
         if m is None or om is None or abs(m - om) <= 30:
@@ -205,7 +233,7 @@ def main() -> int:
             merged[key] = d
             if slot:
                 by_slot[slot] = key
-            by_day[e.date].append((title_key(e.title), e.time, key))
+            by_day[e.date].append((title_key(e.title), e.time, key, stems(e.title), fold(e.city or "")))
             kept += 1
         entry["count"] = kept
         report.append(entry)

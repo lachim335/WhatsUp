@@ -1,8 +1,10 @@
-# Co se děje – Ostrava & Frýdek-Místek
+# Co se děje – Ostrava, Frýdek-Místek, Brno, Bystřice n. P.
 
 Tmavý web s přehledem kulturních akcí na nadcházející víkendy. Data se každý den automaticky stahují z veřejných kalendářů a web se sám nasadí na GitHub Pages.
 
 ## Zdroje
+
+### Ostrava a Frýdek-Místek
 
 | Zdroj | Co pokrývá |
 |---|---|
@@ -18,7 +20,27 @@ Tmavý web s přehledem kulturních akcí na nadcházející víkendy. Data se k
 | [knihovnafm.cz](https://www.knihovnafm.cz/akce/) | Městská knihovna F-M |
 | [klicfm.cz](https://www.klicfm.cz/akce) | SVČ Klíč F-M: akce pro děti s věkovým rozmezím |
 | [visitfm.cz](https://www.visitfm.cz/cz/kalendar-akci) | TIC Frýdek-Místek: akce v F-M a okolí (Hukvaldy, Čeladná, Baška…) |
-| [kudyznudy.cz](https://www.kudyznudy.cz/kalendar-akci/moravskoslezsky-kraj) | doplněk: jarmarky, trhy, akce v Ostravsku a Beskydech |
+| [jfo.cz](https://www.jfo.cz/koncerty/kalendar-koncertu/) | Janáčkova filharmonie Ostrava (rodinné cykly se značí jako akce pro děti) |
+| [kudyznudy.cz](https://www.kudyznudy.cz/kalendar-akci/moravskoslezsky-kraj) | doplněk: jarmarky, trhy, festivaly v Ostravsku, Beskydech, Brně a okolí Bystřice |
+
+### Brno
+
+| Zdroj | Co pokrývá |
+|---|---|
+| [gotobrno.cz](https://www.gotobrno.cz/kalendar-akci/) | oficiální kalendář Brna (TIC Brno): divadla, koncerty, výstavy, akce pro rodiny |
+| [fleda.cz](https://www.fleda.cz/program) | hudební klub Fléda |
+| [kabinetmuz.cz](https://www.kabinetmuz.cz/program) | Kabinet MÚZ: koncerty, divadlo |
+| [starapekarna.cz](https://www.starapekarna.cz/) | hudební klub Stará Pekárna |
+| [zoobrno.cz](https://www.zoobrno.cz/akce) | akce v Zoo Brno |
+| [kinoscala.cz](https://www.kinoscala.cz/cz/program) | Kino Scala, JSON-LD na webu |
+
+### Bystřice nad Pernštejnem
+
+| Zdroj | Co pokrývá |
+|---|---|
+| [korunavysociny.cz](https://www.korunavysociny.cz/akce-a-udalosti) | Koruna Vysočiny: akce na Bystřicku a Nedvědicku (Vír, Rožná, Pernštejn…) |
+| [regionbystricko.cz](https://www.regionbystricko.cz/kalendar-akci-bystricka/) | Mikroregion Bystřicko: jarmarky, koncerty a měsíční program kulturního domu |
+| [bystricenp.cz](https://www.bystricenp.cz/) | kalendář na webu města |
 
 Akce pro děti se poznají podle zdroje (kategorie, věk) a podle názvu nebo místa (pohádka, Mikuláš, Divadlo loutek, zoo, Svět techniky…). Akce zjevně pro dospělé (stand-up, burleska, 18+) se nikdy jako dětské neoznačí. Pravidla jsou v `looks_like_kids()` a `adult_only()` v `scraper/common.py`.
 

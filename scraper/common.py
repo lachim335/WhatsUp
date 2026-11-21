@@ -21,7 +21,7 @@ _last_request = 0.0
 REQUEST_DELAY = 0.8  # seconds between requests – be polite
 
 
-def fetch(url: str, *, retries: int = 2, timeout: int = 30) -> str:
+def fetch(url: str, *, retries: int = 2, timeout: int = 30, headers: dict | None = None) -> str:
     """GET a page as text, with a polite delay and a couple of retries."""
     global _last_request
     for attempt in range(retries + 1):
@@ -30,7 +30,7 @@ def fetch(url: str, *, retries: int = 2, timeout: int = 30) -> str:
             time.sleep(wait)
         _last_request = time.monotonic()
         try:
-            r = _session.get(url, timeout=timeout)
+            r = _session.get(url, timeout=timeout, headers=headers)
             r.raise_for_status()
             r.encoding = r.apparent_encoding if not r.encoding or r.encoding.lower() == "iso-8859-1" else r.encoding
             return r.text
@@ -52,7 +52,7 @@ class Event:
     end_time: str | None = None
     venue: str | None = None
     city: str | None = None
-    region: str = "okoli"         # ostrava | fm | okoli
+    region: str = "okoli"         # ostrava | fm | okoli | brno | bystrice
     category: str = "ostatni"
     image: str | None = None
     description: str | None = None
@@ -117,6 +117,8 @@ def parse_czech_range(text: str, today: date) -> tuple[date, date | None, str | 
         '15. 11. 2026'
     Returns (start, end_or_None, 'HH:MM' or None)."""
     t = fold(clean(text))
+    # '20.–22. listopad 2026' -> '20. listopad – 22. listopad 2026'
+    t = re.sub(r"(\d{1,2})\.\s*[-–]\s*(\d{1,2})\.\s*([a-z]{3,})", r"\1. \3 - \2. \3", t)
     parts: list[list[int | None]] = []
     for m in _DATE_WORD.finditer(t):
         month = MONTHS.get(m.group(2))
@@ -193,6 +195,10 @@ def region_for_city(city: str | None) -> str:
         return "fm"
     if "ostrava" in c:
         return "ostrava"
+    if c.startswith("brno") or c.startswith("brne"):
+        return "brno"
+    if "bystrice nad pern" in c:
+        return "bystrice"
     return "okoli"
 
 
